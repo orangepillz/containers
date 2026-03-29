@@ -125,9 +125,12 @@ extract_container_version() {
   local raw
 
   raw="$(container --version 2>/dev/null || true)"
-  raw="${raw#container }"
-  raw="${raw%% *}"
-  printf '%s\n' "${raw}"
+  if [[ "${raw}" =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  printf '%s\n' ""
 }
 
 preflight() {
@@ -377,6 +380,8 @@ import_ssh_key() {
   local source_path="$1"
   local dest_name="${2:-$(basename "$1")}"
   local public_key="${source_path}.pub"
+  local target_path
+  local public_target_path
 
   preflight
 
@@ -388,21 +393,28 @@ import_ssh_key() {
     die "Destination key name must be a basename, not a path."
   fi
 
+  if [[ ! "${dest_name}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    die "Destination key name '${dest_name}' may only contain letters, numbers, dots, underscores, and hyphens."
+  fi
+
+  target_path="/home/dev/.ssh/${dest_name}"
+  public_target_path="${target_path}.pub"
+
   ensure_running
 
   log "Creating /home/dev/.ssh with strict permissions"
-  container exec --user root "${DEV_NAME}" install -d -m 700 -o dev -g dev /home/dev/.ssh
+  container exec --user root "${DEV_NAME}" install -d -m 700 -o dev -g dev -- /home/dev/.ssh
 
-  log "Copying private key to /home/dev/.ssh/${dest_name}"
-  container exec --interactive --user root "${DEV_NAME}" /bin/sh -lc \
-    "cat > /home/dev/.ssh/${dest_name} && chown dev:dev /home/dev/.ssh/${dest_name} && chmod 600 /home/dev/.ssh/${dest_name}" \
-    < "${source_path}"
+  log "Copying private key to ${target_path}"
+  container exec --interactive --user root "${DEV_NAME}" /bin/sh -c 'cat > "$1"' sh "${target_path}" < "${source_path}"
+  container exec --user root "${DEV_NAME}" chown dev:dev -- "${target_path}"
+  container exec --user root "${DEV_NAME}" chmod 600 -- "${target_path}"
 
   if [[ -f "${public_key}" ]]; then
-    log "Copying public key to /home/dev/.ssh/${dest_name}.pub"
-    container exec --interactive --user root "${DEV_NAME}" /bin/sh -lc \
-      "cat > /home/dev/.ssh/${dest_name}.pub && chown dev:dev /home/dev/.ssh/${dest_name}.pub && chmod 644 /home/dev/.ssh/${dest_name}.pub" \
-      < "${public_key}"
+    log "Copying public key to ${public_target_path}"
+    container exec --interactive --user root "${DEV_NAME}" /bin/sh -c 'cat > "$1"' sh "${public_target_path}" < "${public_key}"
+    container exec --user root "${DEV_NAME}" chown dev:dev -- "${public_target_path}"
+    container exec --user root "${DEV_NAME}" chmod 644 -- "${public_target_path}"
   fi
 }
 

@@ -23,7 +23,7 @@ The default setup is isolation-first:
 - macOS 26 or newer
 - `container` CLI version `0.10.0` or newer
 
-The script fails fast on unsupported hosts. On this machine, for example, it will reject macOS `14.7.4` because Apple documents `container` support for macOS `26+`.
+The script fails fast on unsupported hosts and reports the detected host version when it blocks execution. For example, it will reject macOS `14.7.4` because Apple documents `container` support for macOS `26+`.
 
 ## Quick Start
 
