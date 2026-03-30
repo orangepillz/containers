@@ -1,11 +1,7 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG GO_VERSION=1.24.2
-ARG NODE_MAJOR=22
-ARG MISE_VERSION=v2025.11.11
-ARG ERLANG_VERSION=28
-ARG ELIXIR_VERSION=1.19.5-otp-28
+ARG NODE_MAJOR=24
 ARG DEV_USER=dev
 ARG DEV_UID=1000
 ARG DEV_GID=1000
@@ -14,24 +10,17 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-    autoconf \
     bash-completion \
     build-essential \
     ca-certificates \
     curl \
-    default-jdk-headless \
     file \
-    fop \
     git \
     gnupg \
     iproute2 \
     iptables \
     jq \
     less \
-    libncurses-dev \
-    libssl-dev \
-    libxml2-utils \
-    m4 \
     openssh-client \
     pkg-config \
     procps \
@@ -41,8 +30,6 @@ RUN apt-get update \
     sudo \
     uidmap \
     unzip \
-    unixodbc-dev \
-    xsltproc \
     xz-utils \
  && rm -rf /var/lib/apt/lists/*
 
@@ -73,12 +60,9 @@ RUN apt-get update \
     nodejs \
  && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-arm64.tar.gz" -o /tmp/go.tgz \
- && rm -rf /usr/local/go \
- && tar -C /usr/local -xzf /tmp/go.tgz \
- && rm -f /tmp/go.tgz
-
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex \
+ && corepack enable \
+ && corepack prepare pnpm@latest --activate
 
 RUN groupadd --gid "${DEV_GID}" "${DEV_USER}" \
  && useradd --uid "${DEV_UID}" --gid "${DEV_GID}" --create-home --shell /bin/bash "${DEV_USER}" \
@@ -89,10 +73,9 @@ RUN groupadd --gid "${DEV_GID}" "${DEV_USER}" \
 ENV HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
 ENV HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
 ENV HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
-ENV MISE_DATA_DIR="/usr/local/share/mise"
-ENV SYMPHONY_DIR="/home/dev/symphony"
-ENV SYMPHONY_CONFIG_DIR="/home/dev/.config/symphony"
-ENV SYMPHONY_WORKSPACE_ROOT="/home/dev/code/symphony-workspaces"
+ENV OPENCLAW_DIR="/home/dev/openclaw"
+ENV OPENCLAW_UPSTREAM_URL="https://github.com/openclaw/openclaw.git"
+ENV OPENCLAW_REF="main"
 ENV GIT_SSH_HOST="github.com"
 
 RUN install -d -m 0755 /home/linuxbrew \
@@ -100,36 +83,17 @@ RUN install -d -m 0755 /home/linuxbrew \
  && su - "${DEV_USER}" -c 'NONINTERACTIVE=1 CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"' \
  && /bin/bash -lc 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && brew --version >/dev/null'
 
-RUN install -d -m 0755 /etc/mise "${MISE_DATA_DIR}" /usr/local/share/devbox/symphony \
- && curl -fsSL https://mise.run | MISE_VERSION="${MISE_VERSION}" MISE_INSTALL_PATH=/usr/local/bin/mise sh \
- && printf '%s\n' \
-    '[tools]' \
-    "erlang = \"${ERLANG_VERSION}\"" \
-    "elixir = \"${ELIXIR_VERSION}\"" \
-    > /etc/mise/config.toml \
- && chmod 0644 /etc/mise/config.toml \
- && mise install \
- && ln -sf "$(mise which elixir)" /usr/local/bin/elixir \
- && ln -sf "$(mise which mix)" /usr/local/bin/mix \
- && ln -sf "$(mise which erl)" /usr/local/bin/erl
-
 RUN printf '%s\n' \
-    'export GOPATH="${GOPATH:-$HOME/go}"' \
-    'export PATH="/usr/local/go/bin:${GOPATH}/bin:${PATH}"' \
     'export DOCKER_HOST="${DOCKER_HOST:-unix:///var/run/docker.sock}"' \
     'export HOMEBREW_PREFIX="${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}"' \
     'export HOMEBREW_CELLAR="${HOMEBREW_CELLAR:-${HOMEBREW_PREFIX}/Cellar}"' \
     'export HOMEBREW_REPOSITORY="${HOMEBREW_REPOSITORY:-${HOMEBREW_PREFIX}/Homebrew}"' \
-    'export MISE_DATA_DIR="${MISE_DATA_DIR:-/usr/local/share/mise}"' \
-    'export SYMPHONY_DIR="${SYMPHONY_DIR:-/home/dev/symphony}"' \
-    'export SYMPHONY_CONFIG_DIR="${SYMPHONY_CONFIG_DIR:-/home/dev/.config/symphony}"' \
-    'export SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-/home/dev/code/symphony-workspaces}"' \
+    'export OPENCLAW_DIR="${OPENCLAW_DIR:-/home/dev/openclaw}"' \
+    'export OPENCLAW_UPSTREAM_URL="${OPENCLAW_UPSTREAM_URL:-https://github.com/openclaw/openclaw.git}"' \
+    'export OPENCLAW_REF="${OPENCLAW_REF:-main}"' \
     'export GIT_SSH_HOST="${GIT_SSH_HOST:-github.com}"' \
     'if [ -x "${HOMEBREW_PREFIX}/bin/brew" ]; then' \
     '  eval "$(${HOMEBREW_PREFIX}/bin/brew shellenv)"' \
-    'fi' \
-    'if command -v mise >/dev/null 2>&1; then' \
-    '  eval "$(mise activate bash)"' \
     'fi' \
     > /etc/profile.d/devbox-paths.sh \
  && chmod 0644 /etc/profile.d/devbox-paths.sh \
@@ -146,25 +110,24 @@ RUN printf '%s\n' \
     > /usr/local/share/dev-home-skel/.bash_profile \
  && cp /usr/local/share/dev-home-skel/.bash_profile /usr/local/share/dev-home-skel/.profile
 
-COPY templates/symphony /usr/local/share/devbox/symphony
-COPY scripts/entrypoint.sh /usr/local/bin/devbox-entrypoint
-COPY scripts/guest/setup-git-ssh.sh /usr/local/bin/setup-git-ssh
-COPY scripts/guest/setup-symphony.sh /usr/local/bin/setup-symphony
-COPY scripts/guest/run-symphony.sh /usr/local/bin/run-symphony
+COPY shared/guest/entrypoint.sh /usr/local/bin/container-entrypoint
+COPY shared/guest/setup-git-ssh.sh /usr/local/bin/setup-git-ssh
+COPY images/openclaw/guest/setup-openclaw.sh /usr/local/bin/setup-openclaw
+COPY images/openclaw/guest/onboard-openclaw.sh /usr/local/bin/onboard-openclaw
+COPY images/openclaw/guest/run-openclaw.sh /usr/local/bin/run-openclaw
 
-RUN chmod 0755 /usr/local/bin/devbox-entrypoint \
+RUN chmod 0755 /usr/local/bin/container-entrypoint \
  && chmod 0755 /usr/local/bin/setup-git-ssh \
- && chmod 0755 /usr/local/bin/setup-symphony \
- && chmod 0755 /usr/local/bin/run-symphony \
+ && chmod 0755 /usr/local/bin/setup-openclaw \
+ && chmod 0755 /usr/local/bin/onboard-openclaw \
+ && chmod 0755 /usr/local/bin/run-openclaw \
  && install -d /var/lib/docker \
  && chown -R "${DEV_USER}:${DEV_USER}" /home/linuxbrew \
- && chown -R "${DEV_USER}:${DEV_USER}" "${MISE_DATA_DIR}" \
  && chown -R "${DEV_USER}:${DEV_USER}" "/home/${DEV_USER}"
 
-ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/go/bin:${PATH}"
-ENV GOPATH="/home/dev/go"
+ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 ENV DOCKER_HOST="unix:///var/run/docker.sock"
 
 VOLUME ["/home/dev", "/var/lib/docker"]
 
-ENTRYPOINT ["/usr/local/bin/devbox-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/container-entrypoint"]

@@ -78,8 +78,8 @@ keyscan_host() {
 upsert_managed_host_block() {
   local git_host="$1"
   local identity_path="$2"
-  local start_marker="# >>> dev-container setup-git-ssh ${git_host} >>>"
-  local end_marker="# <<< dev-container setup-git-ssh ${git_host} <<<"
+  local start_marker="# >>> apple-container setup-git-ssh ${git_host} >>>"
+  local end_marker="# <<< apple-container setup-git-ssh ${git_host} <<<"
   local temp_path
 
   temp_path="$(mktemp)"
