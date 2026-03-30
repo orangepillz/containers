@@ -80,9 +80,25 @@ RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-arm64.tar.gz" -o /tmp/go
 
 RUN npm install -g @openai/codex
 
-RUN groupadd --gid "${DEV_GID}" "${DEV_USER}" \
- && useradd --uid "${DEV_UID}" --gid "${DEV_GID}" --create-home --shell /bin/bash "${DEV_USER}" \
+RUN set -eux \
+ && if ! getent group "${DEV_USER}" >/dev/null; then \
+      if getent group "${DEV_GID}" >/dev/null; then \
+        groupadd "${DEV_USER}"; \
+      else \
+        groupadd --gid "${DEV_GID}" "${DEV_USER}"; \
+      fi; \
+    fi \
+ && if ! id -u "${DEV_USER}" >/dev/null 2>&1; then \
+      useradd_args=(--gid "${DEV_USER}" --create-home --shell /bin/bash); \
+      if ! getent passwd "${DEV_UID}" >/dev/null; then \
+        useradd_args+=(--uid "${DEV_UID}"); \
+      fi; \
+      useradd "${useradd_args[@]}" "${DEV_USER}"; \
+    else \
+      usermod --home "/home/${DEV_USER}" --shell /bin/bash "${DEV_USER}"; \
+    fi \
  && usermod -aG sudo,docker "${DEV_USER}" \
+ && install -d -m 0755 /etc/sudoers.d \
  && echo "${DEV_USER} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${DEV_USER}" \
  && chmod 0440 "/etc/sudoers.d/${DEV_USER}"
 

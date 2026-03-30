@@ -151,14 +151,25 @@ ac_image_exists() {
 }
 
 ac_container_exists() {
-  container inspect "${CONTAINER_NAME}" >/dev/null 2>&1
+  local container_ids
+
+  container_ids="$(container list --all --quiet 2>/dev/null || true)"
+  [[ -n "${container_ids}" ]] && grep -Fxq -- "${CONTAINER_NAME}" <<<"${container_ids}"
 }
 
 ac_container_running() {
-  local inspect_output
+  local running_container_ids
 
-  inspect_output="$(container inspect "${CONTAINER_NAME}" 2>/dev/null | tr -d '\n' || true)"
-  [[ "${inspect_output}" =~ \"status\"[[:space:]]*:[[:space:]]*\"running\" ]]
+  running_container_ids="$(container list --quiet 2>/dev/null || true)"
+  [[ -n "${running_container_ids}" ]] && grep -Fxq -- "${CONTAINER_NAME}" <<<"${running_container_ids}"
+}
+
+ac_volume_exists() {
+  local volume_name="$1"
+  local volume_names
+
+  volume_names="$(container volume list --quiet 2>/dev/null || true)"
+  [[ -n "${volume_names}" ]] && grep -Fxq -- "${volume_name}" <<<"${volume_names}"
 }
 
 ac_ensure_image_exists() {
@@ -220,13 +231,13 @@ ac_wait_for_container_running() {
 }
 
 ac_ensure_running() {
+  ac_ensure_container_system
   ac_ensure_container_exists
 
   if ac_container_running; then
     return 0
   fi
 
-  ac_ensure_container_system
   ac_log "Starting container '${CONTAINER_NAME}'"
   container start "${CONTAINER_NAME}" >/dev/null
   ac_wait_for_container_running
@@ -234,8 +245,24 @@ ac_ensure_running() {
 
 ac_create_named_volume() {
   local volume_name="$1"
+  local volume_size="${2:-}"
+  local -a create_cmd
 
-  container volume create "${volume_name}" >/dev/null 2>&1 || true
+  if ac_volume_exists "${volume_name}"; then
+    if [[ -n "${volume_size}" ]]; then
+      ac_log "Reusing volume '${volume_name}' (requested size ${volume_size} only applies when the volume is first created)"
+    fi
+    return 0
+  fi
+
+  create_cmd=(container volume create)
+  if [[ -n "${volume_size}" ]]; then
+    create_cmd+=(-s "${volume_size}")
+  fi
+  create_cmd+=("${volume_name}")
+
+  ac_log "Creating volume '${volume_name}'${volume_size:+ (${volume_size})}"
+  "${create_cmd[@]}" >/dev/null
 }
 
 ac_build_image() {
@@ -279,9 +306,9 @@ ac_create_container() {
     return 0
   fi
 
-  ac_log "Creating named volumes '${CONTAINER_HOME_VOLUME}' and '${CONTAINER_DOCKER_VOLUME}'"
-  ac_create_named_volume "${CONTAINER_HOME_VOLUME}"
-  ac_create_named_volume "${CONTAINER_DOCKER_VOLUME}"
+  ac_log "Ensuring named volumes '${CONTAINER_HOME_VOLUME}' and '${CONTAINER_DOCKER_VOLUME}'"
+  ac_create_named_volume "${CONTAINER_HOME_VOLUME}" "${CONTAINER_HOME_VOLUME_SIZE:-}"
+  ac_create_named_volume "${CONTAINER_DOCKER_VOLUME}" "${CONTAINER_DOCKER_VOLUME_SIZE:-}"
 
   create_cmd=(
     container create

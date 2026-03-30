@@ -25,8 +25,14 @@ The OpenClaw image is a source-based Node 24 + `pnpm` container for the upstream
 ```bash
 OPENCLAW_NAME=openclaw-dev
 OPENCLAW_IMAGE=openclaw-dev:latest
+OPENCLAW_MEMORY=8g
+OPENCLAW_CPUS=4
+OPENCLAW_BUILDER_MEMORY=8g
+OPENCLAW_BUILDER_CPUS=4
 OPENCLAW_HOME_VOLUME=openclaw-dev-home
 OPENCLAW_DOCKER_VOLUME=openclaw-dev-docker
+OPENCLAW_HOME_VOLUME_SIZE=
+OPENCLAW_DOCKER_VOLUME_SIZE=
 OPENCLAW_NODE_MAJOR=24
 OPENCLAW_DIR=/home/dev/openclaw
 OPENCLAW_UPSTREAM_URL=https://github.com/openclaw/openclaw.git
@@ -34,3 +40,5 @@ OPENCLAW_REF=main
 ```
 
 `setup-openclaw` clones or fast-forwards the upstream checkout in `/home/dev/openclaw`, skips pulling when the checkout is dirty, then runs `pnpm install`, `pnpm ui:build`, and `pnpm build`. `onboard-openclaw` runs `pnpm openclaw onboard` without daemon installation, and `run-openclaw` starts `pnpm openclaw gateway --verbose` in the foreground.
+
+`OPENCLAW_HOME_VOLUME_SIZE` and `OPENCLAW_DOCKER_VOLUME_SIZE` are applied when their named volumes are first created. If you reuse an existing volume name, the wrapper keeps that existing volume and its existing size.
