@@ -1,0 +1,55 @@
+---
+tracker:
+  kind: linear
+  api_key: "$LINEAR_API_KEY"
+  project_slug: "__LINEAR_PROJECT_SLUG__"
+  active_states:
+    - Todo
+    - In Progress
+    - Merging
+    - Rework
+  terminal_states:
+    - Closed
+    - Cancelled
+    - Canceled
+    - Duplicate
+    - Done
+polling:
+  interval_ms: 5000
+workspace:
+  root: "__SYMPHONY_WORKSPACE_ROOT__"
+hooks:
+  after_create: |
+    git clone --depth 1 "__SOURCE_REPO_URL__" .
+agent:
+  max_concurrent_agents: 10
+  max_turns: 20
+codex:
+  command: "__CODEX_APP_SERVER_COMMAND__"
+  approval_policy: never
+  thread_sandbox: workspace-write
+---
+You are working on a Linear ticket `{{ issue.identifier }}`.
+
+Issue context:
+- Identifier: {{ issue.identifier }}
+- Title: {{ issue.title }}
+- Current status: {{ issue.state }}
+- Labels: {{ issue.labels }}
+- URL: {{ issue.url }}
+
+Description:
+{% if issue.description %}
+{{ issue.description }}
+{% else %}
+No description provided.
+{% endif %}
+
+Operating rules:
+1. This is an unattended orchestration session. Work autonomously and do not ask a human for routine follow-up.
+2. Only stop early for a real blocker such as missing authentication, missing permissions, missing required tools, or missing secrets.
+3. Work only in the provided repository clone rooted at the issue workspace.
+4. Reproduce the current behavior before making code changes.
+5. Prefer the smallest end-to-end change that fully resolves the ticket.
+6. Run targeted validation for the changed behavior before concluding.
+7. Final message must summarize completed actions, validation, and blockers only.

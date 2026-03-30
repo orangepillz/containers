@@ -18,8 +18,17 @@ DEV_HOME_VOLUME="${DEV_HOME_VOLUME:-${DEV_NAME}-home}"
 DEV_DOCKER_VOLUME="${DEV_DOCKER_VOLUME:-${DEV_NAME}-docker}"
 GO_VERSION="${GO_VERSION:-1.24.2}"
 NODE_MAJOR="${NODE_MAJOR:-22}"
+MISE_VERSION="${MISE_VERSION:-v2025.11.11}"
+ERLANG_VERSION="${ERLANG_VERSION:-28}"
+ELIXIR_VERSION="${ELIXIR_VERSION:-1.19.5-otp-28}"
 SSH_MODE="${SSH_MODE:-import}"
+SYMPHONY_DIR="${SYMPHONY_DIR:-/home/dev/symphony}"
+SYMPHONY_CONFIG_DIR="${SYMPHONY_CONFIG_DIR:-/home/dev/.config/symphony}"
+SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-/home/dev/code/symphony-workspaces}"
+GIT_SSH_HOST="${GIT_SSH_HOST:-github.com}"
+CODEX_APP_SERVER_COMMAND="${CODEX_APP_SERVER_COMMAND:-codex --config shell_environment_policy.inherit=all --config model_reasoning_effort=xhigh --model gpt-5.3-codex app-server}"
 DOCKERFILE_PATH="${DOCKERFILE_PATH:-${ROOT_DIR}/Dockerfile}"
+CONTAINER_EXEC_CMD=()
 
 log() {
   printf '[dev-container] %s\n' "$*"
@@ -39,6 +48,11 @@ Commands:
   create                Create named volumes and the stopped dev container
   up                    Start the dev container, creating it if needed
   shell                 Open a login shell as the dev user
+  setup-git-ssh [--force]
+                        Guided Git SSH bootstrap inside the guest
+  setup-symphony        Clone/update Symphony and write guest-local config
+  run-symphony [--port <port>]
+                        Launch Symphony with the generated workflow
   stop                  Stop the dev container if it is running
   destroy [--purge]     Remove the dev container; keep volumes unless --purge is set
   status                Show compatibility checks and container status
@@ -57,7 +71,14 @@ Environment:
   DEV_DOCKER_VOLUME=${DEV_DOCKER_VOLUME}
   GO_VERSION=${GO_VERSION}
   NODE_MAJOR=${NODE_MAJOR}
+  MISE_VERSION=${MISE_VERSION}
+  ERLANG_VERSION=${ERLANG_VERSION}
+  ELIXIR_VERSION=${ELIXIR_VERSION}
   SSH_MODE=${SSH_MODE}   (valid: import, agent)
+  SYMPHONY_DIR=${SYMPHONY_DIR}
+  SYMPHONY_CONFIG_DIR=${SYMPHONY_CONFIG_DIR}
+  SYMPHONY_WORKSPACE_ROOT=${SYMPHONY_WORKSPACE_ROOT}
+  GIT_SSH_HOST=${GIT_SSH_HOST}
 EOF
 }
 
@@ -215,6 +236,37 @@ ensure_image_exists() {
   fi
 }
 
+build_container_exec_cmd() {
+  local interactive="$1"
+  local tty="$2"
+
+  CONTAINER_EXEC_CMD=(
+    container exec
+    --user dev
+    --workdir /home/dev
+    --env "ERLANG_VERSION=${ERLANG_VERSION}"
+    --env "ELIXIR_VERSION=${ELIXIR_VERSION}"
+    --env "MISE_VERSION=${MISE_VERSION}"
+    --env "SYMPHONY_DIR=${SYMPHONY_DIR}"
+    --env "SYMPHONY_CONFIG_DIR=${SYMPHONY_CONFIG_DIR}"
+    --env "SYMPHONY_WORKSPACE_ROOT=${SYMPHONY_WORKSPACE_ROOT}"
+    --env "GIT_SSH_HOST=${GIT_SSH_HOST}"
+    --env "CODEX_APP_SERVER_COMMAND=${CODEX_APP_SERVER_COMMAND}"
+  )
+
+  if [[ "${interactive}" == "true" ]]; then
+    CONTAINER_EXEC_CMD+=(--interactive)
+  fi
+
+  if [[ "${tty}" == "true" ]]; then
+    CONTAINER_EXEC_CMD+=(--tty)
+  fi
+
+  if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+    CONTAINER_EXEC_CMD+=(--env "OPENAI_API_KEY=${OPENAI_API_KEY}")
+  fi
+}
+
 ensure_container_exists() {
   if ! container_exists; then
     create_container
@@ -262,6 +314,9 @@ build_image() {
     --platform linux/arm64 \
     --build-arg "GO_VERSION=${GO_VERSION}" \
     --build-arg "NODE_MAJOR=${NODE_MAJOR}" \
+    --build-arg "MISE_VERSION=${MISE_VERSION}" \
+    --build-arg "ERLANG_VERSION=${ERLANG_VERSION}" \
+    --build-arg "ELIXIR_VERSION=${ELIXIR_VERSION}" \
     --file "${DOCKERFILE_PATH}" \
     --tag "${DEV_IMAGE}" \
     "${ROOT_DIR}"
@@ -316,19 +371,48 @@ shell_container() {
   preflight
   ensure_running
 
-  exec_cmd=(
-    container exec
-    --interactive
-    --tty
-    --user dev
-    --workdir /home/dev
-  )
-
-  if [[ -n "${OPENAI_API_KEY:-}" ]]; then
-    exec_cmd+=(--env "OPENAI_API_KEY=${OPENAI_API_KEY}")
-  fi
-
+  build_container_exec_cmd true true
+  exec_cmd=("${CONTAINER_EXEC_CMD[@]}")
   exec_cmd+=("${DEV_NAME}" bash -l)
+
+  "${exec_cmd[@]}"
+}
+
+setup_git_ssh() {
+  local exec_cmd
+
+  preflight
+  ensure_running
+
+  build_container_exec_cmd true true
+  exec_cmd=("${CONTAINER_EXEC_CMD[@]}")
+  exec_cmd+=("${DEV_NAME}" setup-git-ssh "$@")
+
+  "${exec_cmd[@]}"
+}
+
+setup_symphony() {
+  local exec_cmd
+
+  preflight
+  ensure_running
+
+  build_container_exec_cmd true true
+  exec_cmd=("${CONTAINER_EXEC_CMD[@]}")
+  exec_cmd+=("${DEV_NAME}" setup-symphony "$@")
+
+  "${exec_cmd[@]}"
+}
+
+run_symphony() {
+  local exec_cmd
+
+  preflight
+  ensure_running
+
+  build_container_exec_cmd true true
+  exec_cmd=("${CONTAINER_EXEC_CMD[@]}")
+  exec_cmd+=("${DEV_NAME}" run-symphony "$@")
 
   "${exec_cmd[@]}"
 }
@@ -428,7 +512,14 @@ status_container() {
   printf 'DEV_CPUS=%s\n' "${DEV_CPUS}"
   printf 'DEV_HOME_VOLUME=%s\n' "${DEV_HOME_VOLUME}"
   printf 'DEV_DOCKER_VOLUME=%s\n' "${DEV_DOCKER_VOLUME}"
+  printf 'MISE_VERSION=%s\n' "${MISE_VERSION}"
+  printf 'ERLANG_VERSION=%s\n' "${ERLANG_VERSION}"
+  printf 'ELIXIR_VERSION=%s\n' "${ELIXIR_VERSION}"
   printf 'SSH_MODE=%s\n' "${SSH_MODE}"
+  printf 'SYMPHONY_DIR=%s\n' "${SYMPHONY_DIR}"
+  printf 'SYMPHONY_CONFIG_DIR=%s\n' "${SYMPHONY_CONFIG_DIR}"
+  printf 'SYMPHONY_WORKSPACE_ROOT=%s\n' "${SYMPHONY_WORKSPACE_ROOT}"
+  printf 'GIT_SSH_HOST=%s\n' "${GIT_SSH_HOST}"
 
   if ! container_exists; then
     log "Container '${DEV_NAME}' has not been created yet"
@@ -463,6 +554,34 @@ main() {
     shell)
       shift
       shell_container "$@"
+      ;;
+    setup-git-ssh)
+      shift
+      if [[ $# -gt 1 ]]; then
+        die "Usage: $(basename "$0") setup-git-ssh [--force]"
+      fi
+      if [[ "${1:-}" == "--force" || "${1:-}" == "--replace" || $# -eq 0 ]]; then
+        setup_git_ssh "$@"
+      else
+        die "Usage: $(basename "$0") setup-git-ssh [--force]"
+      fi
+      ;;
+    setup-symphony)
+      shift
+      if [[ $# -ne 0 ]]; then
+        die "Usage: $(basename "$0") setup-symphony"
+      fi
+      setup_symphony
+      ;;
+    run-symphony)
+      shift
+      if [[ $# -eq 0 ]]; then
+        run_symphony
+      elif [[ $# -eq 2 && "$1" == "--port" ]]; then
+        run_symphony "$@"
+      else
+        die "Usage: $(basename "$0") run-symphony [--port <port>]"
+      fi
       ;;
     stop)
       shift
