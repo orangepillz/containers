@@ -1,6 +1,6 @@
 # OpenClaw Container
 
-The OpenClaw image is a source-based Node 24 + `pnpm` container for the upstream [`openclaw/openclaw`](https://github.com/openclaw/openclaw) repo.
+The OpenClaw image is a source-based Node 24 + `pnpm` container for the upstream [`openclaw/openclaw`](https://github.com/openclaw/openclaw) repo, with the GitHub CLI (`gh`) included in the base image.
 
 ## Commands
 

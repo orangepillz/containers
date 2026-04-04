@@ -1,6 +1,6 @@
 # Dev Container
 
-The dev image keeps the existing Symphony-focused workflow, now under `images/dev/`.
+The dev image keeps the existing Symphony-focused workflow, now under `images/dev/`, and includes the GitHub CLI (`gh`) in the base image.
 
 ## Commands
 
