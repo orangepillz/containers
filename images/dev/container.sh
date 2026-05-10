@@ -19,7 +19,7 @@ DEV_DOCKER_VOLUME="${DEV_DOCKER_VOLUME:-${DEV_NAME}-docker}"
 DEV_HOME_VOLUME_SIZE="${DEV_HOME_VOLUME_SIZE:-}"
 DEV_DOCKER_VOLUME_SIZE="${DEV_DOCKER_VOLUME_SIZE:-}"
 GO_VERSION="${GO_VERSION:-1.24.2}"
-NODE_MAJOR="${NODE_MAJOR:-22}"
+NODE_MAJOR="${NODE_MAJOR:-24}"
 MISE_VERSION="${MISE_VERSION:-v2025.11.11}"
 ERLANG_VERSION="${ERLANG_VERSION:-28}"
 ELIXIR_VERSION="${ELIXIR_VERSION:-1.19.5-otp-28}"
@@ -27,6 +27,9 @@ SSH_MODE="${SSH_MODE:-import}"
 SYMPHONY_DIR="${SYMPHONY_DIR:-/home/dev/symphony}"
 SYMPHONY_CONFIG_DIR="${SYMPHONY_CONFIG_DIR:-/home/dev/.config/symphony}"
 SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-/home/dev/code/symphony-workspaces}"
+OPENCLAW_DIR="${OPENCLAW_DIR:-/home/dev/openclaw}"
+OPENCLAW_UPSTREAM_URL="${OPENCLAW_UPSTREAM_URL:-https://github.com/openclaw/openclaw.git}"
+OPENCLAW_REF="${OPENCLAW_REF:-main}"
 GIT_SSH_HOST="${GIT_SSH_HOST:-github.com}"
 CODEX_APP_SERVER_COMMAND="${CODEX_APP_SERVER_COMMAND:-codex --config shell_environment_policy.inherit=all --config model_reasoning_effort=xhigh --model gpt-5.3-codex app-server}"
 DOCKERFILE_PATH="${DOCKERFILE_PATH:-${SCRIPT_DIR}/Dockerfile}"
@@ -59,6 +62,9 @@ CONTAINER_EXEC_ENV_VARS=(
   SYMPHONY_DIR
   SYMPHONY_CONFIG_DIR
   SYMPHONY_WORKSPACE_ROOT
+  OPENCLAW_DIR
+  OPENCLAW_UPSTREAM_URL
+  OPENCLAW_REF
   GIT_SSH_HOST
   CODEX_APP_SERVER_COMMAND
 )
@@ -82,6 +88,9 @@ CONTAINER_STATUS_VARS=(
   SYMPHONY_DIR
   SYMPHONY_CONFIG_DIR
   SYMPHONY_WORKSPACE_ROOT
+  OPENCLAW_DIR
+  OPENCLAW_UPSTREAM_URL
+  OPENCLAW_REF
   GIT_SSH_HOST
 )
 
@@ -101,6 +110,10 @@ Commands:
   setup-symphony        Clone/update Symphony and write guest-local config
   run-symphony [--port <port>]
                         Launch Symphony with the generated workflow
+  setup-openclaw        Clone/update OpenClaw from source and build it with pnpm
+  onboard-openclaw      Run interactive OpenClaw onboarding without daemon install
+  run-openclaw [--port <port>]
+                        Launch the OpenClaw gateway in the foreground
   stop                  Stop the dev container if it is running
   destroy [--purge]     Remove the dev container; keep volumes unless --purge is set
   status                Show compatibility checks and container status
@@ -126,6 +139,9 @@ Environment:
   SYMPHONY_DIR=${SYMPHONY_DIR}
   SYMPHONY_CONFIG_DIR=${SYMPHONY_CONFIG_DIR}
   SYMPHONY_WORKSPACE_ROOT=${SYMPHONY_WORKSPACE_ROOT}
+  OPENCLAW_DIR=${OPENCLAW_DIR}
+  OPENCLAW_UPSTREAM_URL=${OPENCLAW_UPSTREAM_URL}
+  OPENCLAW_REF=${OPENCLAW_REF}
   GIT_SSH_HOST=${GIT_SSH_HOST}
 
 Examples:
@@ -146,6 +162,18 @@ setup_symphony() {
 
 run_symphony() {
   ac_exec_guest_command true true run-symphony "$@"
+}
+
+setup_openclaw() {
+  ac_exec_guest_command true true setup-openclaw "$@"
+}
+
+onboard_openclaw() {
+  ac_exec_guest_command true true onboard-openclaw "$@"
+}
+
+run_openclaw() {
+  ac_exec_guest_command true true run-openclaw "$@"
 }
 
 main() {
@@ -183,6 +211,18 @@ main() {
     run-symphony)
       shift
       run_symphony "$@"
+      ;;
+    setup-openclaw)
+      shift
+      setup_openclaw "$@"
+      ;;
+    onboard-openclaw)
+      shift
+      onboard_openclaw "$@"
+      ;;
+    run-openclaw)
+      shift
+      run_openclaw "$@"
       ;;
     stop)
       shift

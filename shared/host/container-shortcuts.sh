@@ -11,9 +11,6 @@ _container_shortcuts_wrapper() {
     dev)
       printf '%s\n' "${CONTAINERS_ROOT}/images/dev/container.sh"
       ;;
-    openclaw)
-      printf '%s\n' "${CONTAINERS_ROOT}/images/openclaw/container.sh"
-      ;;
     *)
       return 1
       ;;
@@ -25,9 +22,6 @@ _container_shortcuts_default_image() {
   case "${target}" in
     dev)
       printf '%s\n' "dev:latest"
-      ;;
-    openclaw)
-      printf '%s\n' "openclaw-dev:latest"
       ;;
     *)
       return 1
@@ -41,9 +35,6 @@ _container_shortcuts_prefix() {
     dev)
       printf '%s\n' "DEV"
       ;;
-    openclaw)
-      printf '%s\n' "OPENCLAW"
-      ;;
     *)
       return 1
       ;;
@@ -55,9 +46,6 @@ _container_shortcuts_default_name() {
   case "${target}" in
     dev)
       printf '%s\n' "dev"
-      ;;
-    openclaw)
-      printf '%s\n' "openclaw-dev"
       ;;
     *)
       return 1
@@ -79,9 +67,6 @@ _container_shortcuts_usage() {
   case "${target}" in
     dev)
       noun="devbox"
-      ;;
-    openclaw)
-      noun="openclawbox"
       ;;
     *)
       return 1
@@ -345,13 +330,7 @@ devbox() {
   _container_shortcuts_run dev "$@"
 }
 
-openclawbox() {
-  _container_shortcuts_run openclaw "$@"
-}
-
 alias dv='devbox'
-alias ocb='openclawbox'
 alias dvl='devbox ls'
-alias ocl='openclawbox ls'
 alias bps='boxps'
 alias bcfg='boxconfigs'

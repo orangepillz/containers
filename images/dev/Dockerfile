@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GO_VERSION=1.24.2
-ARG NODE_MAJOR=22
+ARG NODE_MAJOR=24
 ARG MISE_VERSION=v2025.11.11
 ARG ERLANG_VERSION=28
 ARG ELIXIR_VERSION=1.19.5-otp-28
@@ -32,12 +32,14 @@ RUN apt-get update \
     libssl-dev \
     libxml2-utils \
     m4 \
+    ffmpeg \
     openssh-client \
     pkg-config \
     procps \
     python3 \
     python3-pip \
     python3-venv \
+    ripgrep \
     sudo \
     uidmap \
     unzip \
@@ -71,6 +73,11 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     "deb [arch=${arch} signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
     > /etc/apt/sources.list.d/github-cli.list
 
+RUN curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+    | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null \
+ && echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+    > /etc/apt/sources.list.d/ngrok.list
+
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
     containerd.io \
@@ -79,6 +86,7 @@ RUN apt-get update \
     docker-ce-cli \
     docker-compose-plugin \
     gh \
+    ngrok \
     nodejs \
  && rm -rf /var/lib/apt/lists/*
 
@@ -87,7 +95,9 @@ RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-arm64.tar.gz" -o /tmp/go
  && tar -C /usr/local -xzf /tmp/go.tgz \
  && rm -f /tmp/go.tgz
 
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex @anthropic-ai/claude-code \
+ && corepack enable \
+ && corepack prepare pnpm@latest --activate
 
 RUN set -eux \
  && if ! getent group "${DEV_USER}" >/dev/null; then \
@@ -118,6 +128,9 @@ ENV MISE_DATA_DIR="/usr/local/share/mise"
 ENV SYMPHONY_DIR="/home/dev/symphony"
 ENV SYMPHONY_CONFIG_DIR="/home/dev/.config/symphony"
 ENV SYMPHONY_WORKSPACE_ROOT="/home/dev/code/symphony-workspaces"
+ENV OPENCLAW_DIR="/home/dev/openclaw"
+ENV OPENCLAW_UPSTREAM_URL="https://github.com/openclaw/openclaw.git"
+ENV OPENCLAW_REF="main"
 ENV GIT_SSH_HOST="github.com"
 
 RUN install -d -m 0755 /home/linuxbrew \
@@ -138,6 +151,15 @@ RUN install -d -m 0755 /etc/mise "${MISE_DATA_DIR}" /usr/local/share/devbox/symp
  && ln -sf "$(mise which mix)" /usr/local/bin/mix \
  && ln -sf "$(mise which erl)" /usr/local/bin/erl
 
+RUN curl -fsSL https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh \
+ && uv python install 3.11 \
+ && git clone https://github.com/NousResearch/hermes-agent.git /opt/hermes-agent \
+ && cd /opt/hermes-agent \
+ && uv venv venv --python 3.11 \
+ && . venv/bin/activate \
+ && uv pip install -e ".[all]" \
+ && ln -sf /opt/hermes-agent/venv/bin/hermes /usr/local/bin/hermes
+
 RUN printf '%s\n' \
     'export GOPATH="${GOPATH:-$HOME/go}"' \
     'export PATH="/usr/local/go/bin:${GOPATH}/bin:${PATH}"' \
@@ -149,6 +171,9 @@ RUN printf '%s\n' \
     'export SYMPHONY_DIR="${SYMPHONY_DIR:-/home/dev/symphony}"' \
     'export SYMPHONY_CONFIG_DIR="${SYMPHONY_CONFIG_DIR:-/home/dev/.config/symphony}"' \
     'export SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-/home/dev/code/symphony-workspaces}"' \
+    'export OPENCLAW_DIR="${OPENCLAW_DIR:-/home/dev/openclaw}"' \
+    'export OPENCLAW_UPSTREAM_URL="${OPENCLAW_UPSTREAM_URL:-https://github.com/openclaw/openclaw.git}"' \
+    'export OPENCLAW_REF="${OPENCLAW_REF:-main}"' \
     'export GIT_SSH_HOST="${GIT_SSH_HOST:-github.com}"' \
     'if [ -x "${HOMEBREW_PREFIX}/bin/brew" ]; then' \
     '  eval "$(${HOMEBREW_PREFIX}/bin/brew shellenv)"' \
@@ -176,11 +201,17 @@ COPY shared/guest/entrypoint.sh /usr/local/bin/container-entrypoint
 COPY shared/guest/setup-git-ssh.sh /usr/local/bin/setup-git-ssh
 COPY images/dev/guest/setup-symphony.sh /usr/local/bin/setup-symphony
 COPY images/dev/guest/run-symphony.sh /usr/local/bin/run-symphony
+COPY images/dev/guest/setup-openclaw.sh /usr/local/bin/setup-openclaw
+COPY images/dev/guest/onboard-openclaw.sh /usr/local/bin/onboard-openclaw
+COPY images/dev/guest/run-openclaw.sh /usr/local/bin/run-openclaw
 
 RUN chmod 0755 /usr/local/bin/container-entrypoint \
  && chmod 0755 /usr/local/bin/setup-git-ssh \
  && chmod 0755 /usr/local/bin/setup-symphony \
  && chmod 0755 /usr/local/bin/run-symphony \
+ && chmod 0755 /usr/local/bin/setup-openclaw \
+ && chmod 0755 /usr/local/bin/onboard-openclaw \
+ && chmod 0755 /usr/local/bin/run-openclaw \
  && install -d /var/lib/docker \
  && chown -R "${DEV_USER}:${DEV_USER}" /home/linuxbrew \
  && chown -R "${DEV_USER}:${DEV_USER}" "${MISE_DATA_DIR}" \

@@ -1,6 +1,6 @@
 # Dev Container
 
-The dev image keeps the existing Symphony-focused workflow, now under `images/dev/`, and includes the GitHub CLI (`gh`) in the base image.
+A unified development container that includes Symphony, OpenClaw, Hermes (Nous Research), Claude Code, and Codex.
 
 ## Commands
 
@@ -14,6 +14,10 @@ The dev image keeps the existing Symphony-focused workflow, now under `images/de
 ./images/dev/container.sh setup-symphony
 ./images/dev/container.sh run-symphony
 ./images/dev/container.sh run-symphony --port 4000
+./images/dev/container.sh setup-openclaw
+./images/dev/container.sh onboard-openclaw
+./images/dev/container.sh run-openclaw
+./images/dev/container.sh run-openclaw --port 3000
 ./images/dev/container.sh stop
 ./images/dev/container.sh destroy
 ./images/dev/container.sh destroy --purge
@@ -34,7 +38,7 @@ DEV_DOCKER_VOLUME=dev-docker
 DEV_HOME_VOLUME_SIZE=
 DEV_DOCKER_VOLUME_SIZE=
 GO_VERSION=1.24.2
-NODE_MAJOR=22
+NODE_MAJOR=24
 MISE_VERSION=v2025.11.11
 ERLANG_VERSION=28
 ELIXIR_VERSION=1.19.5-otp-28
@@ -42,10 +46,19 @@ SSH_MODE=import
 SYMPHONY_DIR=/home/dev/symphony
 SYMPHONY_CONFIG_DIR=/home/dev/.config/symphony
 SYMPHONY_WORKSPACE_ROOT=/home/dev/code/symphony-workspaces
+OPENCLAW_DIR=/home/dev/openclaw
+OPENCLAW_UPSTREAM_URL=https://github.com/openclaw/openclaw.git
+OPENCLAW_REF=main
 GIT_SSH_HOST=github.com
 ```
 
-`setup-symphony` clones or updates `openai/symphony`, installs the Elixir toolchain with `mise`, and writes guest-local config under `/home/dev/.config/symphony/`. `run-symphony` launches the built Elixir reference implementation from the guest checkout.
+## Included Tools
+
+- **Symphony** -- `setup-symphony` clones or updates `openai/symphony`, installs the Elixir toolchain with `mise`, and writes guest-local config. `run-symphony` launches the Elixir reference implementation.
+- **OpenClaw** -- `setup-openclaw` clones or updates `openclaw/openclaw` and builds with pnpm. `onboard-openclaw` runs interactive onboarding. `run-openclaw` launches the gateway.
+- **Hermes** -- Nous Research autonomous agent, pre-installed at `/opt/hermes-agent` and available as `hermes` on PATH. Configure with `hermes` after first shell.
+- **Claude Code** -- Anthropic CLI coding agent, pre-installed via npm and available as `claude` on PATH.
+- **Codex** -- OpenAI Codex CLI, pre-installed via npm and available as `codex` on PATH.
 
 `DEV_HOME_VOLUME_SIZE` and `DEV_DOCKER_VOLUME_SIZE` are applied when their named volumes are first created. If you reuse an existing volume name, the wrapper keeps that existing volume and its existing size.
 
