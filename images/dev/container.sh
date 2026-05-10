@@ -114,6 +114,10 @@ Commands:
   onboard-openclaw      Run interactive OpenClaw onboarding without daemon install
   run-openclaw [--port <port>]
                         Launch the OpenClaw gateway in the foreground
+  xcode-status          Show host Xcode/Command Line Tools status
+  xcodebuild [args...]  Run host xcodebuild with the provided arguments
+  xcrun [args...]       Run host xcrun with the provided arguments
+  simctl [args...]      Run host xcrun simctl with the provided arguments
   stop                  Stop the dev container if it is running
   destroy [--purge]     Remove the dev container; keep volumes unless --purge is set
   status                Show compatibility checks and container status
@@ -176,6 +180,53 @@ run_openclaw() {
   ac_exec_guest_command true true run-openclaw "$@"
 }
 
+require_host_tool() {
+  local tool="$1"
+
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    ac_die "Host tool '${tool}' is not installed or not on PATH. Install Xcode or Command Line Tools on macOS."
+  fi
+}
+
+xcode_status() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    ac_die "Xcode tools are macOS-only; this command must run on the macOS host."
+  fi
+
+  if command -v xcode-select >/dev/null 2>&1; then
+    printf 'xcode-select=%s\n' "$(xcode-select -p 2>/dev/null || printf 'not configured')"
+  else
+    printf 'xcode-select=not installed\n'
+  fi
+
+  if command -v xcodebuild >/dev/null 2>&1; then
+    if ! xcodebuild -version; then
+      printf 'xcodebuild=installed but unavailable\n'
+    fi
+  else
+    printf 'xcodebuild=not installed\n'
+  fi
+
+  if command -v xcrun >/dev/null 2>&1; then
+    printf 'xcrun=%s\n' "$(command -v xcrun)"
+    printf 'macosx-sdk=%s\n' "$(xcrun --show-sdk-path --sdk macosx 2>/dev/null || printf 'not available')"
+  else
+    printf 'xcrun=not installed\n'
+  fi
+}
+
+run_host_xcode_tool() {
+  local tool="$1"
+  shift
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    ac_die "Xcode tools are macOS-only; '${tool}' must run on the macOS host."
+  fi
+
+  require_host_tool "${tool}"
+  "${tool}" "$@"
+}
+
 main() {
   local command="${1:-help}"
 
@@ -223,6 +274,23 @@ main() {
     run-openclaw)
       shift
       run_openclaw "$@"
+      ;;
+    xcode-status)
+      shift
+      [[ $# -eq 0 ]] || ac_die "Usage: $(basename "$0") xcode-status"
+      xcode_status
+      ;;
+    xcodebuild)
+      shift
+      run_host_xcode_tool xcodebuild "$@"
+      ;;
+    xcrun)
+      shift
+      run_host_xcode_tool xcrun "$@"
+      ;;
+    simctl)
+      shift
+      run_host_xcode_tool xcrun simctl "$@"
       ;;
     stop)
       shift

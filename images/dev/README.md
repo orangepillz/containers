@@ -18,6 +18,10 @@ A unified development container that includes Symphony, OpenClaw, Hermes (Nous R
 ./images/dev/container.sh onboard-openclaw
 ./images/dev/container.sh run-openclaw
 ./images/dev/container.sh run-openclaw --port 3000
+./images/dev/container.sh xcode-status
+./images/dev/container.sh xcodebuild -version
+./images/dev/container.sh xcrun --show-sdk-path --sdk macosx
+./images/dev/container.sh simctl list devices
 ./images/dev/container.sh stop
 ./images/dev/container.sh destroy
 ./images/dev/container.sh destroy --purge
@@ -59,6 +63,20 @@ GIT_SSH_HOST=github.com
 - **Hermes** -- Nous Research autonomous agent, pre-installed at `/opt/hermes-agent` and available as `hermes` on PATH. Configure with `hermes` after first shell.
 - **Claude Code** -- Anthropic CLI coding agent, pre-installed via npm and available as `claude` on PATH.
 - **Codex** -- OpenAI Codex CLI, pre-installed via npm and available as `codex` on PATH.
+- **Xcode host tools** -- Xcode, Command Line Tools, Apple SDKs, and Simulator tooling are macOS-only and do not run inside the Ubuntu guest. The wrapper provides host passthrough commands for `xcodebuild`, `xcrun`, and `xcrun simctl` so you can use the host installation alongside the container.
+
+## Xcode And Apple SDKs
+
+This image is based on Ubuntu, so it cannot install or execute Xcode, Apple SDKs, `xcodebuild`, `xcrun`, or Simulator binaries inside the guest. Use the host passthrough commands instead:
+
+```bash
+./images/dev/container.sh xcode-status
+./images/dev/container.sh xcodebuild -version
+./images/dev/container.sh xcrun --show-sdk-path --sdk macosx
+./images/dev/container.sh simctl list devices
+```
+
+These commands run on the macOS host. They work best from a checkout that is visible to the host filesystem; projects cloned only into the container's `/home/dev` named volume are not visible to host Xcode tooling.
 
 `DEV_HOME_VOLUME_SIZE` and `DEV_DOCKER_VOLUME_SIZE` are applied when their named volumes are first created. If you reuse an existing volume name, the wrapper keeps that existing volume and its existing size.
 

@@ -42,10 +42,14 @@ The unified dev container includes Symphony, OpenClaw, Hermes, Claude Code, and 
 ./images/dev/container.sh onboard-openclaw
 ./images/dev/container.sh run-openclaw
 ./images/dev/container.sh run-openclaw --port 18789
+./images/dev/container.sh xcode-status
+./images/dev/container.sh xcodebuild -version
 ./images/dev/container.sh stop
 ./images/dev/container.sh destroy
 ./images/dev/container.sh destroy --purge
 ./images/dev/container.sh status
 ```
+
+Xcode, Command Line Tools, Apple SDKs, and Simulator binaries remain on the macOS host because this image is an Ubuntu guest. The dev wrapper includes host passthrough commands for `xcodebuild`, `xcrun`, and `xcrun simctl`.
 
 Use the per-image README for image-specific setup details and environment variables.
