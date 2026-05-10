@@ -28,7 +28,7 @@ The wrapper fails fast on unsupported hosts and keeps the same isolation model:
 
 ## Dev Container
 
-The unified dev container includes Symphony, OpenClaw, Hermes, Claude Code, and Codex.
+The unified dev container includes Swift, Symphony, OpenClaw, Hermes, Claude Code, and Codex.
 
 ```bash
 ./images/dev/container.sh build
@@ -44,12 +44,17 @@ The unified dev container includes Symphony, OpenClaw, Hermes, Claude Code, and 
 ./images/dev/container.sh run-openclaw --port 18789
 ./images/dev/container.sh xcode-status
 ./images/dev/container.sh xcodebuild -version
+./images/dev/container.sh xcode-bridge-dns
+./images/dev/container.sh xcode-bridge-start
+./images/dev/container.sh xcode-bridge simctl list devices available
 ./images/dev/container.sh stop
 ./images/dev/container.sh destroy
 ./images/dev/container.sh destroy --purge
 ./images/dev/container.sh status
 ```
 
-Xcode, Command Line Tools, Apple SDKs, and Simulator binaries remain on the macOS host because this image is an Ubuntu guest. The dev wrapper includes host passthrough commands for `xcodebuild`, `xcrun`, and `xcrun simctl`.
+The dev wrapper also syncs the host `${HOME}/.zshrc` and `${HOME}/.codex/skills` into a per-container host config directory. The guest sources the zsh config from `/home/dev/.zshrc` and copies skills into `/home/dev/.codex/skills`.
+
+Xcode, Command Line Tools, Apple SDKs, and Simulator binaries remain on the macOS host because this image is an Ubuntu guest. The dev wrapper includes direct host passthrough commands for `xcodebuild`, `xcrun`, and `xcrun simctl`, plus a token-protected Xcode bridge sidecar that lets commands inside the guest invoke those host tools through `/xcode-bridge`.
 
 Use the per-image README for image-specific setup details and environment variables.

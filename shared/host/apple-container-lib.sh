@@ -348,7 +348,12 @@ ac_shell_container() {
   ac_build_container_exec_cmd true true
 
   exec_cmd=("${CONTAINER_EXEC_CMD[@]}")
-  exec_cmd+=("${CONTAINER_NAME}" bash -l)
+  exec_cmd+=("${CONTAINER_NAME}")
+  if declare -p CONTAINER_SHELL_CMD >/dev/null 2>&1; then
+    exec_cmd+=("${CONTAINER_SHELL_CMD[@]}")
+  else
+    exec_cmd+=(bash -l)
+  fi
   "${exec_cmd[@]}"
 }
 

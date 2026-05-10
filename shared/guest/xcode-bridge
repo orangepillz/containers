@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import pathlib
+import shutil
+import sys
+import urllib.error
+import urllib.request
+
+
+BRIDGE_MOUNT_DEFAULT = "/xcode-bridge"
+
+
+def die(message, code=1):
+    print(f"xcode-bridge: {message}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def is_relative_to(path, parent):
+    try:
+        pathlib.Path(path).resolve().relative_to(pathlib.Path(parent).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def parse_env_file(path):
+    values = {}
+    path = pathlib.Path(path)
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def config():
+    mount = os.environ.get("XCODE_BRIDGE_MOUNT", BRIDGE_MOUNT_DEFAULT)
+    env_file = pathlib.Path(mount) / "bridge.env"
+    file_values = parse_env_file(env_file)
+
+    url = os.environ.get("XCODE_BRIDGE_URL") or file_values.get("XCODE_BRIDGE_URL")
+    token = os.environ.get("XCODE_BRIDGE_TOKEN") or file_values.get("XCODE_BRIDGE_TOKEN")
+    token_file = (
+        os.environ.get("XCODE_BRIDGE_TOKEN_FILE")
+        or file_values.get("XCODE_BRIDGE_TOKEN_FILE")
+        or str(pathlib.Path(mount) / "token")
+    )
+
+    if not token and pathlib.Path(token_file).exists():
+        token = pathlib.Path(token_file).read_text(encoding="utf-8").strip()
+
+    if not url:
+        die(f"bridge URL is not configured; expected {env_file}")
+    if not token:
+        die(f"bridge token is not configured; expected {token_file}")
+
+    return {
+        "mount": pathlib.Path(mount),
+        "url": url.rstrip("/"),
+        "token": token,
+    }
+
+
+def request_json(method, path, payload=None):
+    cfg = config()
+    body = None
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        cfg["url"] + path,
+        data=body,
+        method=method,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {cfg['token']}",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            detail = json.loads(raw).get("error", raw)
+        except json.JSONDecodeError:
+            detail = raw
+        die(detail or f"HTTP {exc.code}", exc.code if exc.code < 128 else 1)
+    except urllib.error.URLError as exc:
+        die(f"cannot reach bridge at {cfg['url']}: {exc.reason}")
+
+
+def copy_path(source, destination, replace=False):
+    source = pathlib.Path(source)
+    destination = pathlib.Path(destination)
+
+    if not source.exists():
+        die(f"source does not exist: {source}")
+    if destination.exists():
+        if not replace:
+            die(f"destination exists: {destination}")
+        if destination.is_dir():
+            shutil.rmtree(destination)
+        else:
+            destination.unlink()
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if source.is_dir():
+        shutil.copytree(source, destination)
+    else:
+        shutil.copy2(source, destination)
+
+
+def bridge_path(path):
+    cfg = config()
+    candidate = pathlib.Path(path)
+    if not candidate.is_absolute():
+        candidate = cfg["mount"] / "exchange" / candidate
+    candidate = candidate.resolve()
+    if not is_relative_to(candidate, cfg["mount"]):
+        die(f"path must be under {cfg['mount']}")
+    return candidate
+
+
+def run_tool(tool, args):
+    response = request_json("POST", "/run", {"tool": tool, "args": args})
+    stdout = response.get("stdout", "")
+    stderr = response.get("stderr", "")
+    if stdout:
+        print(stdout, end="")
+    if stderr:
+        print(stderr, end="", file=sys.stderr)
+    raise SystemExit(int(response.get("exit_code", 1)))
+
+
+def print_status():
+    response = request_json("GET", "/health")
+    print(json.dumps(response, indent=2, sort_keys=True))
+
+
+def put(args):
+    replace = False
+    if args and args[0] == "--replace":
+        replace = True
+        args = args[1:]
+    if not args or len(args) > 2:
+        die("usage: xcode-bridge put [--replace] <local-path> [bridge-name]")
+
+    cfg = config()
+    source = pathlib.Path(args[0]).resolve()
+    name = args[1] if len(args) == 2 else source.name
+    destination = cfg["mount"] / "exchange" / "uploads" / name
+    copy_path(source, destination, replace=replace)
+    print(destination)
+
+
+def get(args):
+    replace = False
+    if args and args[0] == "--replace":
+        replace = True
+        args = args[1:]
+    if len(args) != 2:
+        die("usage: xcode-bridge get [--replace] <bridge-path> <local-path>")
+
+    source = bridge_path(args[0])
+    destination = pathlib.Path(args[1]).resolve()
+    copy_path(source, destination, replace=replace)
+    print(destination)
+
+
+def sim_read(args):
+    if len(args) not in {3, 4, 5}:
+        die("usage: xcode-bridge sim-read <device> <bundle-id> <app|data|groups> [sim-subpath] [local-path]")
+
+    device, bundle_id, container_kind = args[:3]
+    subpath = args[3] if len(args) >= 4 else "."
+    response = request_json(
+        "POST",
+        "/sim-read",
+        {
+            "device": device,
+            "bundle_id": bundle_id,
+            "container": container_kind,
+            "subpath": subpath,
+        },
+    )
+    bridge_result = pathlib.Path(response["path"])
+    if len(args) == 5:
+        copy_path(bridge_result, pathlib.Path(args[4]).resolve(), replace=True)
+        print(pathlib.Path(args[4]).resolve())
+    else:
+        print(bridge_result)
+
+
+def sim_write(args):
+    if len(args) not in {4, 5}:
+        die("usage: xcode-bridge sim-write <device> <bundle-id> <app|data|groups> <local-path> [sim-subpath]")
+
+    cfg = config()
+    device, bundle_id, container_kind, local_path = args[:4]
+    source = pathlib.Path(local_path).resolve()
+    upload = cfg["mount"] / "exchange" / "uploads" / source.name
+    copy_path(source, upload, replace=True)
+
+    response = request_json(
+        "POST",
+        "/sim-write",
+        {
+            "device": device,
+            "bundle_id": bundle_id,
+            "container": container_kind,
+            "source": str(upload),
+            "subpath": args[4] if len(args) == 5 else source.name,
+        },
+    )
+    print(response["path"])
+
+
+def paths():
+    cfg = config()
+    print(f"mount={cfg['mount']}")
+    print(f"exchange={cfg['mount'] / 'exchange'}")
+    print(f"uploads={cfg['mount'] / 'exchange' / 'uploads'}")
+    print(f"downloads={cfg['mount'] / 'exchange' / 'downloads'}")
+    print(f"url={cfg['url']}")
+
+
+def usage():
+    print(
+        """Usage:
+  xcode-bridge status
+  xcode-bridge paths
+  xcode-bridge xcodebuild [args...]
+  xcode-bridge xcrun [args...]
+  xcode-bridge simctl [args...]
+  xcode-bridge put [--replace] <local-path> [bridge-name]
+  xcode-bridge get [--replace] <bridge-path> <local-path>
+  xcode-bridge sim-read <device> <bundle-id> <app|data|groups> [sim-subpath] [local-path]
+  xcode-bridge sim-write <device> <bundle-id> <app|data|groups> <local-path> [sim-subpath]
+
+The xcodebuild, xcrun, and simctl shims invoke the host Xcode bridge directly.
+"""
+    )
+
+
+def main():
+    invoked_as = pathlib.Path(sys.argv[0]).name
+    args = sys.argv[1:]
+
+    if invoked_as in {"xcodebuild", "xcrun", "simctl"}:
+        run_tool(invoked_as, args)
+
+    if not args or args[0] in {"help", "-h", "--help"}:
+        usage()
+        return
+
+    command = args[0]
+    rest = args[1:]
+    if command == "status":
+        print_status()
+    elif command == "paths":
+        paths()
+    elif command in {"xcodebuild", "xcrun", "simctl"}:
+        run_tool(command, rest)
+    elif command == "put":
+        put(rest)
+    elif command == "get":
+        get(rest)
+    elif command == "sim-read":
+        sim_read(rest)
+    elif command == "sim-write":
+        sim_write(rest)
+    else:
+        die(f"unknown command: {command}")
+
+
+if __name__ == "__main__":
+    main()
