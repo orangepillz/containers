@@ -28,7 +28,7 @@ The wrapper fails fast on unsupported hosts and keeps the same isolation model:
 
 ## Dev Container
 
-The unified dev container includes Swift, Symphony, OpenClaw, Hermes, Claude Code, and Codex.
+The unified dev container includes Swift, Symphony, OpenClaw, Hermes, Claude Code, Codex, and Codex Profiles.
 
 ```bash
 ./images/dev/container.sh build

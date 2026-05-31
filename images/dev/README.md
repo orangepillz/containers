@@ -84,6 +84,7 @@ XCODE_BRIDGE_PORT=8378
 - **Hermes** -- Nous Research autonomous agent, pre-installed at `/opt/hermes-agent` and available as `hermes` on PATH. Configure with `hermes` after first shell.
 - **Claude Code** -- Anthropic CLI coding agent, pre-installed via npm and available as `claude` on PATH.
 - **Codex** -- OpenAI Codex CLI, pre-installed via npm and available as `codex` on PATH.
+- **Codex Profiles** -- account profile manager for Codex, pre-installed via npm and available as `codex-profiles` on PATH.
 - **Swift** -- Swift 6.3.1 by default for Ubuntu 24.04 aarch64, installed from the official Swift.org tarball at `/opt/swift` with its PGP signature verified during image build. `swift`, `swiftc`, and SwiftPM are on PATH.
 - **Host zshrc** -- `container.sh build`, `create`, `up`, and `shell` copy the host `${DEV_HOST_ZSHRC_SOURCE}` into `${DEV_HOST_CONFIG_DIR}/dotfiles/.zshrc`. The container mounts that config directory at `/host-config`, copies the file to `/home/dev/.host.zshrc`, and sources it from `/home/dev/.zshrc`.
 - **Codex skills** -- `container.sh build`, `create`, `up`, and `shell` copy the host `${DEV_CODEX_SKILLS_SOURCE}` into `${DEV_HOST_CONFIG_DIR}/codex/skills`. The container mounts that config directory at `/host-config` and copies the skills into `${DEV_CODEX_SKILLS_TARGET}`.

@@ -125,7 +125,7 @@ RUN set -eux \
  && rm -f "/tmp/${swift_archive}" "/tmp/${swift_archive}.sig" \
  && /opt/swift/usr/bin/swift --version
 
-RUN npm install -g @openai/codex @anthropic-ai/claude-code \
+RUN npm install -g @openai/codex @anthropic-ai/claude-code codex-profiles \
  && corepack enable \
  && corepack prepare pnpm@latest --activate
 
